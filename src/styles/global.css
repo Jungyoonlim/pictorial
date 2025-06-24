@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #fafafa;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  #root {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+  
+  canvas {
+    display: block;
+    outline: none;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-all duration-200 border border-gray-300;
+  }
+  
+  .color-swatch {
+    @apply w-8 h-8 rounded-md shadow-sm border-2 border-white hover:scale-110 transition-transform duration-200 cursor-pointer;
+  }
+  
+  /* Custom slider styles */
+  .slider {
+    @apply appearance-none;
+  }
+  
+  .slider::-webkit-slider-thumb {
+    @apply appearance-none w-5 h-5 bg-primary-600 rounded-full cursor-pointer shadow-sm border-2 border-white;
+  }
+  
+  .slider::-moz-range-thumb {
+    @apply w-5 h-5 bg-primary-600 rounded-full cursor-pointer shadow-sm border-2 border-white;
+  }
+  
+  .hue-slider::-webkit-slider-thumb {
+    @apply appearance-none w-5 h-5 bg-white rounded-full cursor-pointer shadow-md border-2 border-gray-300;
+  }
+  
+  .hue-slider::-moz-range-thumb {
+    @apply w-5 h-5 bg-white rounded-full cursor-pointer shadow-md border-2 border-gray-300;
+  }
+}
+
+:root {
+  /* Korean stationery aesthetic - warm, gentle colors */
+  --bg-primary: #fefefe;
+  --bg-secondary: #f8f8f8;
+  --bg-tertiary: #f2f2f2;
+  
+  --text-primary: #2d2d2d;
+  --text-secondary: #5a5a5a;
+  --text-tertiary: #8a8a8a;
+  
+  --accent-primary: #ff6b6b;
+  --accent-secondary: #4ecdc4;
+  --accent-tertiary: #ffe066;
+  
+  --border-light: #e8e8e8;
+  --border-medium: #d0d0d0;
+  
+  --shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 4px 24px rgba(0, 0, 0, 0.12);
+  
+  --radius-small: 8px;
+  --radius-medium: 12px;
+  --radius-large: 16px;
+  
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 600;
+}
+
+/* Beautiful scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Focus styles */
+*:focus {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Smooth animations */
+* {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+/* Text selection */
+::selection {
+  background: var(--accent-primary);
+  color: white;
+} 
