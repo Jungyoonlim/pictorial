@@ -15,3 +15,30 @@ pub enum HandleType {
     Center,
 }
 
+pub struct Handle { 
+    pub handle_type: HandleType,
+    pub position: Point, 
+    pub bounds: Bounds,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ConstaintType { 
+    SnapToGrid,
+    SnapToObject,
+    MaintainAspectRatio,
+    LockRotation,
+    LockScale,
+}
+
+pub struct Constraint {
+    pub constraint_Type: ConstaintType,
+    pub enabled: bool,
+}
+
+pub struct AlignmentGuide { 
+    pub id: u32,
+    pub orientation: Orientation,
+    pub position: f32, 
+    pub element_ids: Vec<u32>,
+}
+
