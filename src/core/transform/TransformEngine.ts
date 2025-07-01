@@ -79,6 +79,7 @@ export class TransformEngine {
   }
 
   // SELECTION HANDLES
+  // handle size is divided by zoom so handles appear consistent regardless of zoom level 
   generateSelectionHandles(selection: Selection): SelectionHandle[] {
     const handles: SelectionHandle[] = []
     const bounds = selection.bounds

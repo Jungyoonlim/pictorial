@@ -1,0 +1,97 @@
+[package]
+name = "pictorial-rs"
+version = "1.0.0"
+edition = "2021"
+description = "A professional design tool focused on color and typography - Rust implementation"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# WebAssembly bindings
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+# Web APIs
+web-sys = { version = "0.3", features = [
+  "console",
+  "CanvasRenderingContext2d",
+  "HtmlCanvasElement",
+  "Window",
+  "Document",
+  "Element",
+  "MouseEvent",
+  "KeyboardEvent",
+  "TouchEvent",
+  "WebGlRenderingContext",
+  "WebGl2RenderingContext",
+  "Performance",
+] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+
+# Math and geometry
+nalgebra = "0.32"
+euclid = "0.22"
+kurbo = "0.10"  # 2D curves and paths
+lyon = "1.0"    # 2D graphics tessellation
+
+# Color handling
+palette = "0.7"
+
+# UUID generation
+uuid = { version = "1.0", features = ["v4", "wasm-bindgen"] }
+
+# Collections and utilities
+indexmap = "2.0"
+smallvec = "1.0"
+itertools = "0.12"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Async
+futures = "0.3"
+
+# FFI and bindings
+getrandom = { version = "0.2", features = ["js"] }
+
+# Optional: for font handling
+fontdue = { version = "0.8", optional = true }
+rusttype = { version = "0.9", optional = true }
+
+# Optional: for AI/ML features
+candle-core = { version = "0.3", optional = true }
+candle-nn = { version = "0.3", optional = true }
+
+[dependencies.leptos]
+version = "0.5"
+features = ["csr"]
+optional = true
+
+[features]
+default = ["console_error_panic_hook"]
+console_error_panic_hook = ["dep:console_error_panic_hook"]
+leptos-ui = ["leptos"]
+fonts = ["fontdue", "rusttype"]
+ai = ["candle-core", "candle-nn"]
+
+[dependencies.console_error_panic_hook]
+version = "0.1"
+optional = true
+
+[profile.release]
+opt-level = "s"
+lto = true
+debug = false
+panic = "abort"
+
+[profile.dev]
+debug = 2
+incremental = true
