@@ -1,6 +1,7 @@
 import { VectorElement, Point, BoundingBox, Transform, GridSettings, Selection, Viewport } from '../vector/VectorTypes'
 import { v4 } from 'uuid'
 
+// Defines the interactive handle users see when selecting an object 
 export interface SelectionHandle {
   id: string
   type: 'corner' | 'edge' | 'rotation' | 'center'
@@ -9,12 +10,14 @@ export interface SelectionHandle {
   bounds: BoundingBox
 }
 
+// Modifies how transformations behave
 export interface Constraint {
   type: 'snap-to-grid' | 'snap-to-object' | 'maintain-aspect' | 'lock-rotation' | 'lock-scale'
   enabled: boolean
   params?: Record<string, any>
 }
 
+// Visual lines that appear when objects snap into alignment 
 export interface AlignmentGuide {
   id: string
   type: 'horizontal' | 'vertical'
@@ -22,6 +25,7 @@ export interface AlignmentGuide {
   elements: string[]
   temporary: boolean
 }
+
 
 export interface SnapResult {
   snapped: boolean
