@@ -42,3 +42,36 @@ pub struct AlignmentGuide {
     pub element_ids: Vec<u32>,
 }
 
+#[derivce(Debug, Clone, Copy)]
+pub enum Orientation { 
+    Horizontal,
+    Vertical,
+}
+
+pub struct TransformEngine { 
+    grid_size: f32, 
+    snap_threshold: f32, 
+    constraints: HashMap<ConstraintType, Constraint>,
+    active_guides: Vec<AlignmentGuide>, 
+    current_transform: Option<TransformSession>,
+}
+
+struct TransformSession { 
+    element_ids: Vec<u32>,
+    start_point: Point, 
+    origin: Point, 
+    handle_type: HandleType,
+    initial_states: HashMap<u32, ElementState>,
+}
+
+#[derive(Clone)]
+struct ElementState {
+    transform: Matrix3, 
+    bounds: Bounds,
+}
+
+impl TransformEngine { 
+    pub fn new() -> Self { 
+        let mut 
+    }
+}
