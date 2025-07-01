@@ -2,43 +2,28 @@ import { useState } from 'react'
 import { observer } from 'mobx-react-lite'
 import { appStore } from '@/stores/AppStore'
 import { motion, AnimatePresence } from 'framer-motion'
+import './ColorPanel.css'
 
 export const ColorPanel = observer(() => {
   const { colorStore, isPanelOpen } = appStore
-  const [activeTab, setActiveTab] = useState<'picker' | 'harmony' | 'palette' | 'ai'>('palette')
+  const [activeTab, setActiveTab] = useState<'picker' | 'harmony' | 'palette' | 'ai'>('picker')
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiStyle, setAiStyle] = useState<'vibrant' | 'muted' | 'pastel' | 'monochrome' | 'neon'>('vibrant')
   
   if (!isPanelOpen) return null
   
   const currentColor = colorStore.currentColor
   
-  // Sample flower colors to match the screenshot
-  const flowerColors = [
-    { hex: '#F4D4A7', name: 'Peach Blossom' },
-    { hex: '#E8B962', name: 'Golden Honey' },
-    { hex: '#FF6B4A', name: 'Coral Red' },
-    { hex: '#CC8B5C', name: 'Burnt Orange' },
-    { hex: '#8B4A42', name: 'Russet Brown' },
-    { hex: '#FFB5A3', name: 'Soft Peach' },
-  ]
-  
   return (
     <motion.div 
-      className="w-80 h-full bg-gray-100 border-l border-gray-200 flex flex-col shadow-xl animate-slide-in-right"
+      className="color-panel"
       initial={{ x: 300 }}
       animate={{ x: 0 }}
       exit={{ x: 300 }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
     >
-      {/* Header with title */}
-      <div className="bg-white px-6 py-5 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-primary-600 flex items-center gap-2">
-          🖌️ Side Panel for Color
-        </h2>
-      </div>
-      
-      {/* Tabs */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex bg-gray-200 rounded-lg p-1">
+      <div className="color-panel__header">
+        <div className="color-panel__tabs">
           {[
             { id: 'picker' as const, label: 'Picker', icon: '🎨' },
             { id: 'harmony' as const, label: 'Harmony', icon: '🌈' },
@@ -47,108 +32,34 @@ export const ColorPanel = observer(() => {
           ].map(tab => (
             <button
               key={tab.id}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 ${
-                activeTab === tab.id 
-                  ? 'bg-white text-primary-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={`color-panel__tab ${activeTab === tab.id ? 'color-panel__tab--active' : ''}`}
               onClick={() => setActiveTab(tab.id)}
             >
-              <span>{tab.icon}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="color-panel__tab-icon">{tab.icon}</span>
+              <span className="color-panel__tab-label">{tab.label}</span>
             </button>
           ))}
         </div>
       </div>
       
-      {/* Content */}
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div className="color-panel__content">
         <AnimatePresence mode="wait">
-          {activeTab === 'palette' && (
-            <motion.div
-              key="palette"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
-            >
-              {/* Flowers section like in screenshot */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3 bg-gray-200 px-3 py-1 rounded">
-                  Flowers
-                </h3>
-                
-                {/* Large gradient swatch */}
-                <div className="h-16 mb-4 rounded-lg overflow-hidden shadow-sm">
-                  <div 
-                    className="w-full h-full"
-                    style={{ 
-                      background: `linear-gradient(90deg, ${flowerColors[0].hex} 0%, ${flowerColors[1].hex} 100%)`
-                    }}
-                  />
-                </div>
-                
-                {/* Color swatches grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  {flowerColors.map((color, index) => (
-                    <div
-                      key={index}
-                      className="h-12 rounded-lg cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105"
-                      style={{ backgroundColor: color.hex }}
-                      onClick={() => colorStore.setCurrentColor(color.hex)}
-                      title={`${color.name} - ${color.hex}`}
-                    />
-                  ))}
-                </div>
-              </div>
-              
-              {/* Color palette from store */}
-              {colorStore.colorPalette.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">
-                    Custom Palette
-                  </h3>
-                  <div className="grid grid-cols-4 gap-2">
-                    {colorStore.colorPalette.map(color => (
-                      <div
-                        key={color.id}
-                        className={`aspect-square rounded-lg cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 hover:scale-105 ${
-                          color.aiGenerated ? 'ring-2 ring-primary-300' : ''
-                        }`}
-                        style={{ backgroundColor: color.hex }}
-                        onClick={() => colorStore.setCurrentColor(color.hex)}
-                        title={color.aiGenerated ? `${color.hex} (AI: ${color.confidence?.toFixed(2)})` : color.hex}
-                      >
-                        {color.aiGenerated && (
-                          <div className="absolute top-1 right-1 text-xs">✨</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          )}
-          
           {activeTab === 'picker' && (
             <motion.div
               key="picker"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
+              className="color-picker"
             >
-              {/* Current color display */}
-              <div className="flex items-center gap-4 p-4 bg-gray-200 rounded-xl">
+              <div className="color-picker__current">
                 <div 
-                  className="w-16 h-16 rounded-lg shadow-sm border-2 border-white"
+                  className="color-picker__swatch"
                   style={{ backgroundColor: currentColor.hex }}
                 />
-                <div className="flex-1">
-                  <div className="font-mono text-lg font-medium text-gray-900">
-                    {currentColor.hex}
-                  </div>
-                  <div className="font-mono text-sm text-gray-600">
+                <div className="color-picker__info">
+                  <div className="color-picker__hex">{currentColor.hex}</div>
+                  <div className="color-picker__lch">
                     L: {currentColor.lch[0].toFixed(0)} 
                     C: {currentColor.lch[1].toFixed(0)} 
                     H: {currentColor.lch[2].toFixed(0)}°
@@ -156,12 +67,9 @@ export const ColorPanel = observer(() => {
                 </div>
               </div>
               
-              {/* Color controls */}
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                    Lightness
-                  </label>
+              <div className="color-picker__controls">
+                <div className="color-picker__control">
+                  <label>Lightness</label>
                   <input
                     type="range"
                     min="0"
@@ -171,14 +79,12 @@ export const ColorPanel = observer(() => {
                       const [, c, h] = currentColor.lch
                       colorStore.setCurrentColorFromLch(+e.target.value, c, h)
                     }}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                    className="color-picker__slider"
                   />
                 </div>
                 
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                    Chroma
-                  </label>
+                <div className="color-picker__control">
+                  <label>Chroma</label>
                   <input
                     type="range"
                     min="0"
@@ -188,14 +94,12 @@ export const ColorPanel = observer(() => {
                       const [l, , h] = currentColor.lch
                       colorStore.setCurrentColorFromLch(l, +e.target.value, h)
                     }}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                    className="color-picker__slider"
                   />
                 </div>
                 
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                    Hue
-                  </label>
+                <div className="color-picker__control">
+                  <label>Hue</label>
                   <input
                     type="range"
                     min="0"
@@ -205,41 +109,172 @@ export const ColorPanel = observer(() => {
                       const [l, c] = currentColor.lch
                       colorStore.setCurrentColorFromLch(l, c, +e.target.value)
                     }}
-                    className="w-full h-2 rounded-lg appearance-none cursor-pointer hue-slider"
-                    style={{
-                      background: 'linear-gradient(to right, hsl(0, 70%, 60%), hsl(60, 70%, 60%), hsl(120, 70%, 60%), hsl(180, 70%, 60%), hsl(240, 70%, 60%), hsl(300, 70%, 60%), hsl(360, 70%, 60%))'
-                    }}
+                    className="color-picker__slider color-picker__slider--hue"
                   />
                 </div>
               </div>
               
               <button
-                className="btn-primary w-full"
+                className="color-picker__add"
                 onClick={() => colorStore.addToPalette()}
               >
                 Add to Palette
               </button>
             </motion.div>
           )}
+          
+          {activeTab === 'harmony' && (
+            <motion.div
+              key="harmony"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="color-harmony"
+            >
+              {['analogous', 'complement', 'triadic', 'split-complement'].map(type => (
+                <div key={type} className="color-harmony__group">
+                  <div className="color-harmony__label">
+                    {type.charAt(0).toUpperCase() + type.slice(1).replace('-', ' ')}
+                  </div>
+                  <div className="color-harmony__swatches">
+                    {colorStore.generateHarmony(type as any).map((color, index) => (
+                      <div
+                        key={`${type}-${index}`}
+                        className="color-harmony__swatch"
+                        style={{ backgroundColor: color.hex }}
+                        onClick={() => colorStore.setCurrentColor(color.hex)}
+                        title={color.hex}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          )}
+          
+          {activeTab === 'palette' && (
+            <motion.div
+              key="palette"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="color-palette"
+            >
+              <div className="color-palette__grid">
+                {colorStore.colorPalette.map(color => (
+                  <div
+                    key={color.id}
+                    className={`color-palette__swatch ${color.aiGenerated ? 'color-palette__swatch--ai' : ''}`}
+                    style={{ backgroundColor: color.hex }}
+                    onClick={() => colorStore.setCurrentColor(color.hex)}
+                    title={color.aiGenerated ? `${color.hex} (AI: ${color.confidence?.toFixed(2)})` : color.hex}
+                  >
+                    {color.aiGenerated && (
+                      <div className="color-palette__ai-badge">✨</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              {colorStore.colorPalette.length === 0 && (
+                <div className="color-palette__empty">
+                  No colors in palette yet. Add some from the picker!
+                </div>
+              )}
+            </motion.div>
+          )}
+          
+          {activeTab === 'ai' && (
+            <motion.div
+              key="ai"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="ai-generator"
+            >
+              <div className="ai-generator__status">
+                <div className={`ai-status ai-status--${colorStore.getAIStatus()}`}>
+                  {colorStore.getAIStatus() === 'initializing' && '🔄 Initializing AI...'}
+                  {colorStore.getAIStatus() === 'ready' && '🎨 Ready to generate'}
+                  {colorStore.getAIStatus() === 'generating' && '✨ Generating colors...'}
+                  {colorStore.getAIStatus() === 'error' && '❌ Error'}
+                </div>
+              </div>
+              
+              <div className="ai-generator__form">
+                <div className="ai-generator__field">
+                  <label>Describe your vision</label>
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="sunset over the ocean, vibrant and warm..."
+                    className="ai-generator__prompt"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="ai-generator__field">
+                  <label>Style</label>
+                  <select
+                    value={aiStyle}
+                    onChange={(e) => setAiStyle(e.target.value as any)}
+                    className="ai-generator__style"
+                  >
+                    <option value="vibrant">Vibrant</option>
+                    <option value="muted">Muted</option>
+                    <option value="pastel">Pastel</option>
+                    <option value="monochrome">Monochrome</option>
+                    <option value="neon">Neon</option>
+                  </select>
+                </div>
+                
+                <button
+                  className="ai-generator__generate"
+                  onClick={() => aiPrompt.trim() && colorStore.generateFromText(aiPrompt, aiStyle)}
+                  disabled={!aiPrompt.trim() || colorStore.isGenerating || colorStore.getAIStatus() !== 'ready'}
+                >
+                  {colorStore.isGenerating ? '✨ Generating...' : '🎨 Generate Colors'}
+                </button>
+              </div>
+              
+              {colorStore.lastGeneratedColors.length > 0 && (
+                <div className="ai-generator__results">
+                  <div className="ai-generator__label">Generated Colors</div>
+                  <div className="ai-generator__swatches">
+                    {colorStore.lastGeneratedColors.map(color => (
+                      <div
+                        key={color.id}
+                        className="ai-generator__swatch"
+                        style={{ backgroundColor: color.hex }}
+                        onClick={() => colorStore.setCurrentColor(color.hex)}
+                        title={`${color.hex}\nConfidence: ${color.confidence?.toFixed(2)}\n${color.reasoning}`}
+                      >
+                        <div className="ai-generator__confidence">
+                          {Math.round((color.confidence || 0) * 100)}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="ai-generator__actions">
+                    <button
+                      className="ai-generator__action"
+                      onClick={() => colorStore.addGeneratedToPalette()}
+                    >
+                      Add All to Palette
+                    </button>
+                    <button
+                      className="ai-generator__action ai-generator__action--secondary"
+                      onClick={() => colorStore.clearGenerated()}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
         </AnimatePresence>
-      </div>
-      
-      {/* Bottom toolbar icons */}
-      <div className="p-4 border-t border-gray-200 bg-white">
-        <div className="flex justify-center gap-4 text-gray-400">
-          <button className="w-8 h-8 flex items-center justify-center hover:text-gray-600 transition-colors">
-            🖼️
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center hover:text-gray-600 transition-colors">
-            ⚙️
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center hover:text-gray-600 transition-colors">
-            🎨
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center hover:text-gray-600 transition-colors">
-            📐
-          </button>
-        </div>
       </div>
     </motion.div>
   )

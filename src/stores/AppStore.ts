@@ -31,6 +31,7 @@ export class AppStore {
   // Global actions
   undo() {
     // TODO: Implement command pattern undo
+    
   }
   
   redo() {
