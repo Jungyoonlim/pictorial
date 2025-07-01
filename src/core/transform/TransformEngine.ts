@@ -1,5 +1,5 @@
 import { VectorElement, Point, BoundingBox, Transform, GridSettings, Selection, Viewport } from '../vector/VectorTypes'
-import { v4 as uuid } from 'uuid'
+import { v4 } from 'uuid'
 
 export interface SelectionHandle {
   id: string
@@ -75,7 +75,6 @@ export class TransformEngine {
   }
 
   // SELECTION HANDLES
-
   generateSelectionHandles(selection: Selection): SelectionHandle[] {
     const handles: SelectionHandle[] = []
     const bounds = selection.bounds
@@ -428,7 +427,7 @@ export class TransformEngine {
                 snappedX = true
                 
                 guides.push({
-                  id: uuid(),
+                  id: v4(),
                   type: 'vertical',
                   position: nearbyPoint.x,
                   elements: [element.id, nearby.id],
@@ -441,7 +440,7 @@ export class TransformEngine {
                 snappedY = true
                 
                 guides.push({
-                  id: uuid(),
+                  id: v4(),
                   type: 'horizontal',
                   position: nearbyPoint.y,
                   elements: [element.id, nearby.id],
