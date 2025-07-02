@@ -492,7 +492,6 @@ export class VectorStore {
   }
 
   // GRID AND CONSTRAINTS
-
   setGrid(grid: Partial<GridSettings>): void {
     runInAction(() => {
       Object.assign(this.grid, grid)

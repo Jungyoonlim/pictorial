@@ -7,7 +7,7 @@ import './ColorPanel.css'
 
 // High-performance color swatch component
 const VirtualColorSwatch = ({ columnIndex, rowIndex, style, data }: any) => {
-  const { colors, itemSize, onColorSelect, itemsPerRow } = data
+  const { colors, onColorSelect, itemsPerRow } = data
   const index = rowIndex * itemsPerRow + columnIndex
   const color = colors[index]
   

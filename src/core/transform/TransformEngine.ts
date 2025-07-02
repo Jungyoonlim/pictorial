@@ -181,7 +181,6 @@ export class TransformEngine {
   }
 
   // TRANSFORMATION
-
   startTransform(elementIds: string[], type: TransformAction['type'], origin: Point): void {
     this.currentAction = {
       type,
