@@ -1,5 +1,14 @@
 use crate::math::{Point, Matrix3, Bounds, Vector2};
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
+
+type FxMap<K, V> = FxHashMap<K, V>;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TransformError {
+    AlreadyTransforming,
+    UnknownElement,
+    InvalidParameters,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HandleType {
@@ -15,6 +24,7 @@ pub enum HandleType {
     Center,
 }
 
+#[derive(Debug)]
 pub struct Handle { 
     pub handle_type: HandleType,
     pub position: Point, 
@@ -30,12 +40,19 @@ pub enum ConstraintType {
     LockScale,
 }
 
-#[derive(Debug, Clone)]
+impl Default for ConstraintType {
+    fn default() -> Self {
+        ConstraintType::SnapToGrid
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Constraint {
     pub constraint_type: ConstraintType,
     pub enabled: bool,
 }
 
+#[derive(Debug)]
 pub struct AlignmentGuide { 
     pub id: u32,
     pub orientation: Orientation,
@@ -53,7 +70,7 @@ pub enum Orientation {
 pub struct TransformEngine { 
     grid_size: f32, 
     snap_threshold: f32, 
-    constraints: HashMap<ConstraintType, Constraint>,
+    constraints: FxMap<ConstraintType, Constraint>,
     active_guides: Vec<AlignmentGuide>, 
     current_transform: Option<TransformSession>,
 }
@@ -63,8 +80,8 @@ struct TransformSession {
     start_point: Point, 
     origin: Point, 
     handle_type: HandleType,
-    initial_states: HashMap<u32, ElementState>,
-    current_transforms: HashMap<u32, Matrix3>,
+    initial_states: FxMap<u32, ElementState>,
+    current_transforms: FxMap<u32, Matrix3>,
 }
 
 #[derive(Clone)]
@@ -75,7 +92,7 @@ struct ElementState {
 
 impl TransformEngine { 
     pub fn new() -> Self {
-        let mut constraints = HashMap::new();
+        let mut constraints = FxMap::default();
         constraints.insert(ConstraintType::SnapToGrid, Constraint {
             constraint_type: ConstraintType::SnapToGrid,
             enabled: false,
@@ -102,9 +119,13 @@ impl TransformEngine {
         }
     }
 
-    pub fn start_transform(&mut self, element_ids: Vec<u32>, handle_type: HandleType, start_point: Point, element_bounds: HashMap<u32, (Matrix3, Bounds)>) -> bool {
+    pub fn start_transform(&mut self, element_ids: Vec<u32>, handle_type: HandleType, start_point: Point, element_bounds: FxMap<u32, (Matrix3, Bounds)>) -> Result<(), TransformError> {
         if self.current_transform.is_some() {
-            return false;
+            return Err(TransformError::AlreadyTransforming);
+        }
+
+        if element_ids.is_empty() {
+            return Err(TransformError::InvalidParameters);
         }
 
         // Calculate origin based on handle type - use opposite corner for scaling
@@ -128,10 +149,20 @@ impl TransformEngine {
                 start_point
             }
         } else {
-            // For multiple elements, use the center of the combined bounds
+            // For multiple elements, use the combined bounds with appropriate origin
             if let Some(combined_bounds) = Self::calculate_combined_bounds(&element_bounds) {
-                Point::new((combined_bounds.min.x + combined_bounds.max.x) / 2.0, 
-                          (combined_bounds.min.y + combined_bounds.max.y) / 2.0)
+                match handle_type {
+                    HandleType::TopLeft => Point::new(combined_bounds.max.x, combined_bounds.max.y),
+                    HandleType::TopRight => Point::new(combined_bounds.min.x, combined_bounds.max.y),
+                    HandleType::BottomLeft => Point::new(combined_bounds.max.x, combined_bounds.min.y),
+                    HandleType::BottomRight => Point::new(combined_bounds.min.x, combined_bounds.min.y),
+                    HandleType::TopCenter => Point::new((combined_bounds.min.x + combined_bounds.max.x) / 2.0, combined_bounds.max.y),
+                    HandleType::BottomCenter => Point::new((combined_bounds.min.x + combined_bounds.max.x) / 2.0, combined_bounds.min.y),
+                    HandleType::MiddleLeft => Point::new(combined_bounds.max.x, (combined_bounds.min.y + combined_bounds.max.y) / 2.0),
+                    HandleType::MiddleRight => Point::new(combined_bounds.min.x, (combined_bounds.min.y + combined_bounds.max.y) / 2.0),
+                    _ => Point::new((combined_bounds.min.x + combined_bounds.max.x) / 2.0, 
+                                  (combined_bounds.min.y + combined_bounds.max.y) / 2.0),
+                }
             } else {
                 start_point
             }
@@ -156,10 +187,10 @@ impl TransformEngine {
             current_transforms,
         });
 
-        true
+        Ok(())
     }
 
-    pub fn update_transform(&mut self, current_point: Point) -> Option<HashMap<u32, Matrix3>> {
+    pub fn update_transform(&mut self, current_point: Point) -> Option<FxMap<u32, Matrix3>> {
         let session = self.current_transform.as_mut()?;
         let mut transforms = HashMap::new();
 
@@ -176,7 +207,8 @@ impl TransformEngine {
                     HandleType::Center => {
                         new_transform = Matrix3::translation(delta.x, delta.y) * new_transform;
                     }
-                    HandleType::TopLeft | HandleType::TopRight | HandleType::BottomLeft | HandleType::BottomRight => {
+                    HandleType::TopLeft | HandleType::TopRight | HandleType::BottomLeft | HandleType::BottomRight |
+                    HandleType::TopCenter | HandleType::BottomCenter | HandleType::MiddleLeft | HandleType::MiddleRight => {
                         if !self.is_constraint_enabled(ConstraintType::LockScale) {
                             // Guard against divide-by-zero
                             let denom_x = (session.start_point.x - session.origin.x).abs();
@@ -189,15 +221,26 @@ impl TransformEngine {
                                 let scale_x = (current_point.x - session.origin.x) / (session.start_point.x - session.origin.x);
                                 let scale_y = (current_point.y - session.origin.y) / (session.start_point.y - session.origin.y);
                                 
-                                if self.is_constraint_enabled(ConstraintType::MaintainAspectRatio) {
-                                    // Use the actual signed value of the larger magnitude axis
-                                    let uniform_scale = if scale_x.abs() > scale_y.abs() { scale_x } else { scale_y };
-                                    let scale = Matrix3::scale(uniform_scale, uniform_scale);
-                                    new_transform = scale * new_transform;
-                                } else {
-                                    let scale = Matrix3::scale(scale_x, scale_y);
-                                    new_transform = scale * new_transform;
-                                }
+                                // For edge handles, constrain scaling to one axis
+                                let (final_scale_x, final_scale_y) = match session.handle_type {
+                                    HandleType::TopCenter | HandleType::BottomCenter => (1.0, scale_y),
+                                    HandleType::MiddleLeft | HandleType::MiddleRight => (scale_x, 1.0),
+                                    _ => {
+                                        // Corner handles - check aspect ratio
+                                        if self.is_constraint_enabled(ConstraintType::MaintainAspectRatio) {
+                                            // Fix sign logic to prevent mirroring
+                                            let sign_x = scale_x.signum();
+                                            let sign_y = scale_y.signum();
+                                            let uniform = scale_x.abs().max(scale_y.abs());
+                                            (uniform * sign_x, uniform * sign_y)
+                                        } else {
+                                            (scale_x, scale_y)
+                                        }
+                                    }
+                                };
+                                
+                                let scale = Matrix3::scale(final_scale_x, final_scale_y);
+                                new_transform = scale * new_transform;
                             }
                         }
                     }
@@ -228,7 +271,7 @@ impl TransformEngine {
         Some(transforms)
     }
 
-    pub fn finish_transform(&mut self) -> Option<HashMap<u32, Matrix3>> {
+    pub fn finish_transform(&mut self) -> Option<FxMap<u32, Matrix3>> {
         let final_transforms = if let Some(ref session) = self.current_transform {
             session.current_transforms.clone()
         } else {
@@ -239,7 +282,9 @@ impl TransformEngine {
         Some(final_transforms)
     }
 
-    pub fn cancel_transform(&mut self) -> Option<HashMap<u32, Matrix3>> {
+    /// Cancels the current transformation and returns the original (pre-transform) matrices.
+    /// This allows callers to revert elements to their initial state.
+    pub fn cancel_transform(&mut self) -> Option<FxMap<u32, Matrix3>> {
         let initial_transforms = if let Some(ref session) = self.current_transform {
             session.initial_states.iter()
                 .map(|(&id, state)| (id, state.transform))
@@ -264,6 +309,8 @@ impl TransformEngine {
         }
     }
 
+    /// Snaps the translation component of a transform to the grid.
+    /// Note: This only affects translation - scale and rotation are untouched.
     fn snap_to_grid(&self, transform: Matrix3) -> Matrix3 {
         let translation = transform.translation();
         let snapped_x = (translation.x / self.grid_size).round() * self.grid_size;
@@ -466,7 +513,7 @@ impl TransformEngine {
         self.current_transform.as_ref().map(|s| s.element_ids.as_slice())
     }
 
-    fn calculate_combined_bounds(element_bounds: &HashMap<u32, (Matrix3, Bounds)>) -> Option<Bounds> {
+    fn calculate_combined_bounds(element_bounds: &FxMap<u32, (Matrix3, Bounds)>) -> Option<Bounds> {
         if element_bounds.is_empty() {
             return None;
         }
@@ -476,7 +523,7 @@ impl TransformEngine {
         let mut max_x = f32::NEG_INFINITY;
         let mut max_y = f32::NEG_INFINITY;
 
-        for (_, bounds) in element_bounds.values() {
+        for &(_, ref bounds) in element_bounds.values() {
             min_x = min_x.min(bounds.min.x);
             min_y = min_y.min(bounds.min.y);
             max_x = max_x.max(bounds.max.x);
