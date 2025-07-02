@@ -1,5 +1,5 @@
 use crate::math::{Point, Matrix3, Bounds, Vector2};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HandleType {
@@ -48,6 +48,7 @@ pub enum Orientation {
     Vertical,
 }
 
+#[derive(Debug)]
 pub struct TransformEngine { 
     grid_size: f32, 
     snap_threshold: f32, 
@@ -62,6 +63,7 @@ struct TransformSession {
     origin: Point, 
     handle_type: HandleType,
     initial_states: HashMap<u32, ElementState>,
+    current_transforms: HashMap<u32, Matrix3>,
 }
 
 #[derive(Clone)]
@@ -117,19 +119,24 @@ impl TransformEngine {
             .map(|(id, (transform, bounds))| (id, ElementState { transform, bounds }))
             .collect();
 
+        let current_transforms = element_bounds.iter()
+            .map(|(&id, &(transform, _))| (id, transform))
+            .collect();
+
         self.current_transform = Some(TransformSession {
             element_ids,
             start_point,
             origin,
             handle_type,
             initial_states,
+            current_transforms,
         });
 
         true
     }
 
     pub fn update_transform(&mut self, current_point: Point) -> Option<HashMap<u32, Matrix3>> {
-        let session = self.current_transform.as_ref()?;
+        let session = self.current_transform.as_mut()?;
         let mut transforms = HashMap::new();
 
         let delta = Vector2::new(
@@ -146,11 +153,18 @@ impl TransformEngine {
                         new_transform = Matrix3::translation(delta.x, delta.y) * new_transform;
                     }
                     HandleType::TopLeft | HandleType::TopRight | HandleType::BottomLeft | HandleType::BottomRight => {
-                        let scale_x = (current_point.x - session.origin.x) / (session.start_point.x - session.origin.x);
-                        let scale_y = (current_point.y - session.origin.y) / (session.start_point.y - session.origin.y);
+                        // Guard against divide-by-zero
+                        let denom_x = (session.start_point.x - session.origin.x).max(1e-4);
+                        let denom_y = (session.start_point.y - session.origin.y).max(1e-4);
+                        
+                        let scale_x = (current_point.x - session.origin.x) / denom_x;
+                        let scale_y = (current_point.y - session.origin.y) / denom_y;
                         
                         if self.is_constraint_enabled(ConstraintType::MaintainAspectRatio) {
-                            let uniform_scale = (scale_x.abs() + scale_y.abs()) / 2.0;
+                            // Use the larger magnitude and preserve sign
+                            let max_scale = scale_x.abs().max(scale_y.abs());
+                            let scale_sign = if scale_x.abs() > scale_y.abs() { scale_x.signum() } else { scale_y.signum() };
+                            let uniform_scale = max_scale * scale_sign;
                             let scale = Matrix3::scale(uniform_scale, uniform_scale);
                             new_transform = scale * new_transform;
                         } else {
@@ -160,8 +174,12 @@ impl TransformEngine {
                     }
                     HandleType::Rotation => {
                         if !self.is_constraint_enabled(ConstraintType::LockRotation) {
-                            let angle = (current_point.y - session.origin.y).atan2(current_point.x - session.origin.x);
-                            let rotation = Matrix3::rotation(angle);
+                            let start_angle = (session.start_point.y - session.origin.y)
+                                .atan2(session.start_point.x - session.origin.x);
+                            let current_angle = (current_point.y - session.origin.y)
+                                .atan2(current_point.x - session.origin.x);
+                            let delta_angle = current_angle - start_angle;
+                            let rotation = Matrix3::rotation(delta_angle);
                             new_transform = rotation * new_transform;
                         }
                     }
@@ -176,14 +194,14 @@ impl TransformEngine {
             }
         }
 
+        // Store the computed transforms in the session
+        session.current_transforms = transforms.clone();
         Some(transforms)
     }
 
     pub fn finish_transform(&mut self) -> Option<HashMap<u32, Matrix3>> {
         let final_transforms = if let Some(ref session) = self.current_transform {
-            session.initial_states.iter()
-                .map(|(&id, state)| (id, state.transform))
-                .collect()
+            session.current_transforms.clone()
         } else {
             return None;
         };
@@ -311,7 +329,7 @@ impl TransformEngine {
         None
     }
 
-    pub fn get_cursor_for_handle(&self, handle_type: HandleType) -> &'static str {
+    pub fn cursor_for_handle(&self, handle_type: HandleType) -> &'static str {
         match handle_type {
             HandleType::TopLeft | HandleType::BottomRight => "nw-resize",
             HandleType::TopRight | HandleType::BottomLeft => "ne-resize",
@@ -382,7 +400,7 @@ impl TransformEngine {
         self.active_guides.clear();
     }
 
-    pub fn get_active_guides(&self) -> &[AlignmentGuide] {
+    pub fn active_guides(&self) -> &[AlignmentGuide] {
         &self.active_guides
     }
 
@@ -394,11 +412,11 @@ impl TransformEngine {
         self.snap_threshold = threshold;
     }
 
-    pub fn get_grid_size(&self) -> f32 {
+    pub fn grid_size(&self) -> f32 {
         self.grid_size
     }
 
-    pub fn get_snap_threshold(&self) -> f32 {
+    pub fn snap_threshold(&self) -> f32 {
         self.snap_threshold
     }
 
@@ -406,7 +424,7 @@ impl TransformEngine {
         self.current_transform.is_some()
     }
 
-    pub fn get_transforming_elements(&self) -> Option<&[u32]> {
+    pub fn transforming_elements(&self) -> Option<&[u32]> {
         self.current_transform.as_ref().map(|s| s.element_ids.as_slice())
     }
 }
