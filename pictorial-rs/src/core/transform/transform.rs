@@ -1,7 +1,5 @@
 use crate::math::{Point, Matrix3, Bounds, Vector2};
-use rustc_hash::FxHashMap;
-
-type FxMap<K, V> = FxHashMap<K, V>;
+use rustc_hash::FxHashMap as Map;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TransformError {
@@ -40,13 +38,7 @@ pub enum ConstraintType {
     LockScale,
 }
 
-impl Default for ConstraintType {
-    fn default() -> Self {
-        ConstraintType::SnapToGrid
-    }
-}
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Constraint {
     pub constraint_type: ConstraintType,
     pub enabled: bool,
@@ -66,22 +58,23 @@ pub enum Orientation {
     Vertical,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TransformEngine { 
     grid_size: f32, 
     snap_threshold: f32, 
-    constraints: FxMap<ConstraintType, Constraint>,
+    constraints: Map<ConstraintType, Constraint>,
     active_guides: Vec<AlignmentGuide>, 
     current_transform: Option<TransformSession>,
 }
 
+#[derive(Clone)]
 struct TransformSession { 
     element_ids: Vec<u32>,
     start_point: Point, 
     origin: Point, 
     handle_type: HandleType,
-    initial_states: FxMap<u32, ElementState>,
-    current_transforms: FxMap<u32, Matrix3>,
+    initial_states: Map<u32, ElementState>,
+    current_transforms: Map<u32, Matrix3>,
 }
 
 #[derive(Clone)]
@@ -92,7 +85,7 @@ struct ElementState {
 
 impl TransformEngine { 
     pub fn new() -> Self {
-        let mut constraints = FxMap::default();
+        let mut constraints = Map::default();
         constraints.insert(ConstraintType::SnapToGrid, Constraint {
             constraint_type: ConstraintType::SnapToGrid,
             enabled: false,
@@ -119,13 +112,20 @@ impl TransformEngine {
         }
     }
 
-    pub fn start_transform(&mut self, element_ids: Vec<u32>, handle_type: HandleType, start_point: Point, element_bounds: FxMap<u32, (Matrix3, Bounds)>) -> Result<(), TransformError> {
+    pub fn start_transform(&mut self, element_ids: Vec<u32>, handle_type: HandleType, start_point: Point, element_bounds: Map<u32, (Matrix3, Bounds)>) -> Result<(), TransformError> {
         if self.current_transform.is_some() {
             return Err(TransformError::AlreadyTransforming);
         }
 
         if element_ids.is_empty() {
             return Err(TransformError::InvalidParameters);
+        }
+
+        // Check that all element IDs exist in the provided bounds
+        for &id in &element_ids {
+            if !element_bounds.contains_key(&id) {
+                return Err(TransformError::UnknownElement);
+            }
         }
 
         // Calculate origin based on handle type - use opposite corner for scaling
@@ -190,9 +190,9 @@ impl TransformEngine {
         Ok(())
     }
 
-    pub fn update_transform(&mut self, current_point: Point) -> Option<FxMap<u32, Matrix3>> {
+    pub fn update_transform(&mut self, current_point: Point) -> Option<Map<u32, Matrix3>> {
         let session = self.current_transform.as_mut()?;
-        let mut transforms = HashMap::new();
+        let mut transforms = Map::default();
 
         let delta = Vector2::new(
             current_point.x - session.start_point.x,
@@ -222,22 +222,20 @@ impl TransformEngine {
                                 let scale_y = (current_point.y - session.origin.y) / (session.start_point.y - session.origin.y);
                                 
                                 // For edge handles, constrain scaling to one axis
-                                let (final_scale_x, final_scale_y) = match session.handle_type {
+                                let (mut final_scale_x, mut final_scale_y) = match session.handle_type {
                                     HandleType::TopCenter | HandleType::BottomCenter => (1.0, scale_y),
                                     HandleType::MiddleLeft | HandleType::MiddleRight => (scale_x, 1.0),
-                                    _ => {
-                                        // Corner handles - check aspect ratio
-                                        if self.is_constraint_enabled(ConstraintType::MaintainAspectRatio) {
-                                            // Fix sign logic to prevent mirroring
-                                            let sign_x = scale_x.signum();
-                                            let sign_y = scale_y.signum();
-                                            let uniform = scale_x.abs().max(scale_y.abs());
-                                            (uniform * sign_x, uniform * sign_y)
-                                        } else {
-                                            (scale_x, scale_y)
-                                        }
-                                    }
+                                    _ => (scale_x, scale_y), // Corner handles
                                 };
+
+                                // Apply aspect ratio constraint if enabled (even for edge handles)
+                                if self.is_constraint_enabled(ConstraintType::MaintainAspectRatio) {
+                                    let sign_x = final_scale_x.signum();
+                                    let sign_y = final_scale_y.signum();
+                                    let uniform = final_scale_x.abs().max(final_scale_y.abs());
+                                    final_scale_x = uniform * sign_x;
+                                    final_scale_y = uniform * sign_y;
+                                }
                                 
                                 let scale = Matrix3::scale(final_scale_x, final_scale_y);
                                 new_transform = scale * new_transform;
@@ -271,7 +269,7 @@ impl TransformEngine {
         Some(transforms)
     }
 
-    pub fn finish_transform(&mut self) -> Option<FxMap<u32, Matrix3>> {
+    pub fn finish_transform(&mut self) -> Option<Map<u32, Matrix3>> {
         let final_transforms = if let Some(ref session) = self.current_transform {
             session.current_transforms.clone()
         } else {
@@ -284,7 +282,7 @@ impl TransformEngine {
 
     /// Cancels the current transformation and returns the original (pre-transform) matrices.
     /// This allows callers to revert elements to their initial state.
-    pub fn cancel_transform(&mut self) -> Option<FxMap<u32, Matrix3>> {
+    pub fn cancel_transform(&mut self) -> Option<Map<u32, Matrix3>> {
         let initial_transforms = if let Some(ref session) = self.current_transform {
             session.initial_states.iter()
                 .map(|(&id, state)| (id, state.transform))
@@ -513,7 +511,7 @@ impl TransformEngine {
         self.current_transform.as_ref().map(|s| s.element_ids.as_slice())
     }
 
-    fn calculate_combined_bounds(element_bounds: &FxMap<u32, (Matrix3, Bounds)>) -> Option<Bounds> {
+    fn calculate_combined_bounds(element_bounds: &Map<u32, (Matrix3, Bounds)>) -> Option<Bounds> {
         if element_bounds.is_empty() {
             return None;
         }
