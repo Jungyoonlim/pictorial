@@ -30,6 +30,7 @@ pub enum ConstraintType {
     LockScale,
 }
 
+#[derive(Debug, Clone)]
 pub struct Constraint {
     pub constraint_type: ConstraintType,
     pub enabled: bool,
@@ -106,20 +107,43 @@ impl TransformEngine {
             return false;
         }
 
-        let origin = match handle_type {
-            HandleType::Center => start_point,
-            HandleType::TopLeft => Point::new(start_point.x, start_point.y),
-            HandleType::TopRight => Point::new(start_point.x, start_point.y),
-            HandleType::BottomLeft => Point::new(start_point.x, start_point.y),
-            HandleType::BottomRight => Point::new(start_point.x, start_point.y),
-            _ => start_point,
+        // Calculate origin based on handle type - use opposite corner for scaling
+        let origin = if element_ids.len() == 1 {
+            // For single element, use opposite corner of bounds
+            let first_id = element_ids[0];
+            if let Some((_, bounds)) = element_bounds.get(&first_id) {
+                match handle_type {
+                    HandleType::TopLeft => Point::new(bounds.max.x, bounds.max.y),
+                    HandleType::TopRight => Point::new(bounds.min.x, bounds.max.y),
+                    HandleType::BottomLeft => Point::new(bounds.max.x, bounds.min.y),
+                    HandleType::BottomRight => Point::new(bounds.min.x, bounds.min.y),
+                    HandleType::TopCenter => Point::new((bounds.min.x + bounds.max.x) / 2.0, bounds.max.y),
+                    HandleType::BottomCenter => Point::new((bounds.min.x + bounds.max.x) / 2.0, bounds.min.y),
+                    HandleType::MiddleLeft => Point::new(bounds.max.x, (bounds.min.y + bounds.max.y) / 2.0),
+                    HandleType::MiddleRight => Point::new(bounds.min.x, (bounds.min.y + bounds.max.y) / 2.0),
+                    HandleType::Center => Point::new((bounds.min.x + bounds.max.x) / 2.0, (bounds.min.y + bounds.max.y) / 2.0),
+                    HandleType::Rotation => Point::new((bounds.min.x + bounds.max.x) / 2.0, (bounds.min.y + bounds.max.y) / 2.0),
+                }
+            } else {
+                start_point
+            }
+        } else {
+            // For multiple elements, use the center of the combined bounds
+            if let Some(combined_bounds) = Self::calculate_combined_bounds(&element_bounds) {
+                Point::new((combined_bounds.min.x + combined_bounds.max.x) / 2.0, 
+                          (combined_bounds.min.y + combined_bounds.max.y) / 2.0)
+            } else {
+                start_point
+            }
         };
 
-        let initial_states = element_bounds.into_iter()
-            .map(|(id, (transform, bounds))| (id, ElementState { transform, bounds }))
+        let initial_states = element_bounds
+            .iter()
+            .map(|(&id, &(transform, bounds))| (id, ElementState { transform, bounds }))
             .collect();
 
-        let current_transforms = element_bounds.iter()
+        let current_transforms = element_bounds
+            .iter()
             .map(|(&id, &(transform, _))| (id, transform))
             .collect();
 
@@ -153,23 +177,28 @@ impl TransformEngine {
                         new_transform = Matrix3::translation(delta.x, delta.y) * new_transform;
                     }
                     HandleType::TopLeft | HandleType::TopRight | HandleType::BottomLeft | HandleType::BottomRight => {
-                        // Guard against divide-by-zero
-                        let denom_x = (session.start_point.x - session.origin.x).max(1e-4);
-                        let denom_y = (session.start_point.y - session.origin.y).max(1e-4);
-                        
-                        let scale_x = (current_point.x - session.origin.x) / denom_x;
-                        let scale_y = (current_point.y - session.origin.y) / denom_y;
-                        
-                        if self.is_constraint_enabled(ConstraintType::MaintainAspectRatio) {
-                            // Use the larger magnitude and preserve sign
-                            let max_scale = scale_x.abs().max(scale_y.abs());
-                            let scale_sign = if scale_x.abs() > scale_y.abs() { scale_x.signum() } else { scale_y.signum() };
-                            let uniform_scale = max_scale * scale_sign;
-                            let scale = Matrix3::scale(uniform_scale, uniform_scale);
-                            new_transform = scale * new_transform;
-                        } else {
-                            let scale = Matrix3::scale(scale_x, scale_y);
-                            new_transform = scale * new_transform;
+                        if !self.is_constraint_enabled(ConstraintType::LockScale) {
+                            // Guard against divide-by-zero
+                            let denom_x = (session.start_point.x - session.origin.x).abs();
+                            let denom_y = (session.start_point.y - session.origin.y).abs();
+                            
+                            // Early return identity scale if denominator is too small
+                            if denom_x < 1e-4 || denom_y < 1e-4 {
+                                // Keep original transform (identity scale)
+                            } else {
+                                let scale_x = (current_point.x - session.origin.x) / (session.start_point.x - session.origin.x);
+                                let scale_y = (current_point.y - session.origin.y) / (session.start_point.y - session.origin.y);
+                                
+                                if self.is_constraint_enabled(ConstraintType::MaintainAspectRatio) {
+                                    // Use the actual signed value of the larger magnitude axis
+                                    let uniform_scale = if scale_x.abs() > scale_y.abs() { scale_x } else { scale_y };
+                                    let scale = Matrix3::scale(uniform_scale, uniform_scale);
+                                    new_transform = scale * new_transform;
+                                } else {
+                                    let scale = Matrix3::scale(scale_x, scale_y);
+                                    new_transform = scale * new_transform;
+                                }
+                            }
                         }
                     }
                     HandleType::Rotation => {
@@ -210,8 +239,17 @@ impl TransformEngine {
         Some(final_transforms)
     }
 
-    pub fn cancel_transform(&mut self) {
+    pub fn cancel_transform(&mut self) -> Option<HashMap<u32, Matrix3>> {
+        let initial_transforms = if let Some(ref session) = self.current_transform {
+            session.initial_states.iter()
+                .map(|(&id, state)| (id, state.transform))
+                .collect()
+        } else {
+            return None;
+        };
+
         self.current_transform = None;
+        Some(initial_transforms)
     }
 
     pub fn is_constraint_enabled(&self, constraint_type: ConstraintType) -> bool {
@@ -400,7 +438,7 @@ impl TransformEngine {
         self.active_guides.clear();
     }
 
-    pub fn active_guides(&self) -> &[AlignmentGuide] {
+    pub fn guides(&self) -> &[AlignmentGuide] {
         &self.active_guides
     }
 
@@ -426,5 +464,28 @@ impl TransformEngine {
 
     pub fn transforming_elements(&self) -> Option<&[u32]> {
         self.current_transform.as_ref().map(|s| s.element_ids.as_slice())
+    }
+
+    fn calculate_combined_bounds(element_bounds: &HashMap<u32, (Matrix3, Bounds)>) -> Option<Bounds> {
+        if element_bounds.is_empty() {
+            return None;
+        }
+
+        let mut min_x = f32::INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+
+        for (_, bounds) in element_bounds.values() {
+            min_x = min_x.min(bounds.min.x);
+            min_y = min_y.min(bounds.min.y);
+            max_x = max_x.max(bounds.max.x);
+            max_y = max_y.max(bounds.max.y);
+        }
+
+        Some(Bounds::new(
+            Point::new(min_x, min_y),
+            Point::new(max_x, max_y),
+        ))
     }
 }
